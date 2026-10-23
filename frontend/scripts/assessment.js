@@ -388,9 +388,10 @@ async function runCode() {
     const response = await apiFetch('/scenario-api/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ input, headers: getBrowserHeaders(true), questionId: activeQuestion.id, sourceFiles: editableSourceFiles(), mongoState: savedMongoState() }) });
     const data = await response.json();
     if (data.mongoState) localStorage.setItem('assessment-mongo-state-' + activeQuestion.id, JSON.stringify(data.mongoState));
-    const item = { name: data.runtimeError ? 'Runtime error: ' + data.runtimeError : 'Execution completed · application returned HTTP ' + data.status, passed: !data.runtimeError && data.status < 400 };
+    const runtimeError = data.runtimeError || data.error || null;
+    const item = { name: runtimeError ? 'Runtime error: ' + runtimeError : 'Execution completed · application returned HTTP ' + data.status, passed: !runtimeError && data.status < 400 };
     showResults({ results: [item], stdout: data.stdout }, 'Run Code output', 'output');
-    document.getElementById('testSummary').textContent = data.runtimeError ? 'Runtime error' : 'Program finished · HTTP ' + data.status;
+    document.getElementById('testSummary').textContent = runtimeError ? 'Runtime error' : 'Program finished · HTTP ' + data.status;
     if (data.request) showBrowserOutput({ request: data.request, response: data.response, logs: data.logs }, data.status, 'Run Code');
   } catch (error) { toast('Run failed: ' + error.message); }
   finally { button.disabled = false; button.innerHTML = '▶&nbsp; Run Code'; }

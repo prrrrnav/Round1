@@ -102,7 +102,7 @@ async function runInSandboxExclusive(payload) {
     const workerKey = randomBytes(24).toString('hex');
     const workspace = '/vercel/sandbox/' + path.basename(question.root);
     const candidate = await sandbox.createUser('candidate');
-    await candidate.runCommand({
+    const workerCommand = await candidate.runCommand({
       cmd: 'node', args: ['candidate-worker.js'], cwd: workspace, detached: true,
       env: { ASSESSMENT_WORKSPACE: workspace, ASSESSMENT_QUESTION: question.id, ASSESSMENT_WORKER_KEY: workerKey, PORT: String(PORT) }
     });
@@ -115,7 +115,11 @@ async function runInSandboxExclusive(payload) {
       } catch {}
       await new Promise((resolve) => setTimeout(resolve, 150));
     }
-    if (!ready) throw Object.assign(new Error('The isolated candidate runtime did not start.'), { status: 502 });
+    if (!ready) {
+      const [workerStdout, workerStderr] = await Promise.all([workerCommand.stdout(), workerCommand.stderr()]);
+      const diagnostics = clip([workerStdout, workerStderr].filter(Boolean).join('\n')).trim();
+      throw Object.assign(new Error('The isolated candidate runtime did not start.' + (diagnostics ? ' ' + diagnostics : '')), { status: 502 });
+    }
 
     const invoke = async (request, dependencies) => {
       const response = await fetch(baseUrl + '/run', {
@@ -150,7 +154,7 @@ async function runInSandboxExclusive(payload) {
       handleRequest: (request, dependencies) => invoke(request, dependencies)
     });
   } finally {
-    if (sandbox) await sandbox.stop();
+    if (sandbox) await sandbox.stop().catch(() => {});
   }
 }
 
