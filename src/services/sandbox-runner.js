@@ -101,8 +101,7 @@ async function runInSandboxExclusive(payload) {
     await sandbox.writeFiles(buildSandboxFiles(payload, question));
     const workerKey = randomBytes(24).toString('hex');
     const workspace = '/vercel/sandbox/' + path.basename(question.root);
-    const candidate = await sandbox.createUser('candidate');
-    const workerCommand = await candidate.runCommand({
+    const workerCommand = await sandbox.runCommand({
       cmd: 'node', args: ['candidate-worker.js'], cwd: workspace, detached: true,
       env: { ASSESSMENT_WORKSPACE: workspace, ASSESSMENT_QUESTION: question.id, ASSESSMENT_WORKER_KEY: workerKey, PORT: String(PORT) }
     });
