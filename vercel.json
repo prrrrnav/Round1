@@ -3,7 +3,7 @@
   "functions": {
     "src/server.js": {
       "maxDuration": 60,
-      "includeFiles": ["scenario/**/*", "scenario-mongodb/**/*"]
+      "includeFiles": "{scenario,scenario-mongodb}/**/*"
     }
   }
 }
