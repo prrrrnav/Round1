@@ -111,21 +111,30 @@ async function partnerTransport(request) {
     request
   };
 }
-async function runCandidateRequest(input, requestHeaders = {}) {
+async function runCandidateRequest(input, requestHeaders = {}, options = {}) {
+  if (process.env.VERCEL && !options.inSandbox) {
+    const { runInSandbox } = require('./sandbox-runner');
+    return runInSandbox({ action: 'request', questionId: options.questionId || activeQuestionId, input, headers: requestHeaders, sourceFiles: options.sourceFiles || {}, mongoState: options.mongoState || {} });
+  }
+  const questionId = options.questionId || activeQuestionId;
+  const question = getQuestion(questionId);
+  if (!question) throw Object.assign(new Error('That assessment question does not exist.'), { status: 404 });
+  const isMongoQuestion = questionId === 'mongo-webhook';
+  if (options.mongoState && isMongoQuestion) mongoDatabase = createMongoDatabase(options.mongoState);
   const captured = await captureConsole(async () => {
-    const { handleRequest } = loadCandidateApp();
+    const handleRequest = options.handleRequest || loadCandidateApp().handleRequest;
     const headers = { 'x-client-key': 'assessment-client-key', 'x-request-id': 'req-assessment-001' };
     for (const [name, value] of Object.entries(requestHeaders || {})) headers[name.toLowerCase()] = value;
     const request = {
       headers,
       body: input
     };
-    if (activeQuestionId === 'mongo-webhook') {
+    if (isMongoQuestion) {
       const logOffset = mongoDatabase.logs.length;
       const result = await handleRequest(request, { db: mongoDatabase });
       return {
         ...result,
-        request: { method: 'POST', path: currentQuestion().browser.path, ...request },
+        request: { method: 'POST', path: question.browser.path, ...request },
         databaseLogs: mongoDatabase.logs.slice(logOffset)
       };
     }
@@ -138,10 +147,18 @@ async function runCandidateRequest(input, requestHeaders = {}) {
     request: result.upstream?.request || result.request || null,
     response: result.upstream?.body || result.body,
     logs: [...(result.logs || []).map((entry) => typeof entry === 'string' ? entry : JSON.stringify(entry)), ...(result.databaseLogs || [])],
-    stdout: captured.stdout
+    stdout: captured.stdout,
+    mongoState: isMongoQuestion ? mongoDatabase.snapshot() : undefined
   };
 }
-async function runCandidateTests(customerUpdate) {
+async function runCandidateTests(customerUpdate, options = {}) {
+  if (process.env.VERCEL && !options.inSandbox) {
+    const { runInSandbox } = require('./sandbox-runner');
+    return runInSandbox({ action: 'tests', questionId: options.questionId || activeQuestionId, customerUpdate, sourceFiles: options.sourceFiles || {} });
+  }
+  const questionId = options.questionId || activeQuestionId;
+  const question = getQuestion(questionId);
+  if (!question) throw Object.assign(new Error('That assessment question does not exist.'), { status: 404 });
   const results = [];
   const stdout = [];
   const check = async (name, fn, hidden = false) => {
@@ -154,9 +171,9 @@ async function runCandidateTests(customerUpdate) {
     }
   };
   try {
-    const { handleRequest } = loadCandidateApp();
-    const { runPublicChecks } = require(resolveWorkspaceFile(activeQuestionId === 'mongo-webhook' ? 'test/webhook.test.js' : 'test/integration.test.js'));
-    if (activeQuestionId === 'mongo-webhook') {
+    const handleRequest = options.handleRequest || loadCandidateApp().handleRequest;
+    const { runPublicChecks } = require(path.join(question.root, questionId === 'mongo-webhook' ? 'test/webhook.test.js' : 'test/integration.test.js'));
+    if (questionId === 'mongo-webhook') {
       const createDependencies = () => ({ db: createMongoDatabase() });
       await runPublicChecks(handleRequest, createDependencies, check);
       await check('uses the stable eventId key with case-sensitive MongoDB field matching', async () => {
@@ -220,8 +237,8 @@ async function runCandidateTests(customerUpdate) {
       hiddenPassed,
       hiddenTotal,
       customerUpdate,
-      questionId: activeQuestionId,
-      source: Object.fromEntries(currentFiles().filter((file) => file.editable).map((file) => [file.path, readWorkspaceFile(file.path)]))
+      questionId,
+      source: Object.fromEntries(question.files.filter((file) => file.editable).map((file) => [file.path, options.sourceFiles?.[file.path] ?? fs.readFileSync(path.join(question.root, file.path), 'utf8')]))
     };
   }
   return {

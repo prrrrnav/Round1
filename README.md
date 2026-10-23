@@ -41,4 +41,8 @@ The assessment server separates HTTP routes, controllers, middleware, and servic
 
 ## Local execution scope
 
-Candidate source runs in the Node.js assessment process. This project is intended for trusted local practice and is not hardened for public execution of untrusted code.
+Local practice runs candidate source in the Node.js assessment process. On Vercel, every Run Code, Run tests, and Integration browser request creates a disposable Vercel Sandbox with network access disabled. Only the selected scenario's candidate source and runtime adapter are copied into it; test suites and hidden checks stay in the assessment service. Browser edits are stored per candidate in local storage, not in shared server files.
+
+## Hosted deployment
+
+The static candidate interface is published from `frontend/` to GitHub Pages. Its API base is configured in `frontend/scripts/config.js` and points to the Vercel Express service. The Vercel function explicitly includes both scenario directories so it can load read-only assessment materials and test suites. The `src/server.js` function has a 60-second limit to accommodate isolated sandbox startup and execution.

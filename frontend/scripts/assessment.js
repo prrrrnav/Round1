@@ -19,6 +19,22 @@ const collapsedFolders = new Set();
 let workspaceCollapsed = false;
 let toastTimer;
 let searchTimer;
+const apiBase = String(window.ASSESSMENT_API_BASE || '').replace(/\/$/, '');
+function apiFetch(url, options = {}) {
+  const headers = new Headers(options.headers || {});
+  headers.set('X-Assessment-Question', activeQuestion?.id || localStorage.getItem('assessment-question') || 'customer-integration');
+  return fetch(apiBase + url, { ...options, headers });
+}
+function sourceStorageKey(questionId = activeQuestion?.id || 'customer-integration') { return 'assessment-source-' + questionId; }
+function editableSourceFiles() {
+  if (activePath) buffers.set(activePath, editor.value);
+  return Object.fromEntries(Array.from(files).filter(([, metadata]) => metadata.editable).map(([filePath]) => [filePath, buffers.get(filePath)]));
+}
+function saveSourceFilesLocally() { localStorage.setItem(sourceStorageKey(), JSON.stringify(editableSourceFiles())); }
+function savedMongoState() {
+  try { return JSON.parse(localStorage.getItem('assessment-mongo-state-' + (activeQuestion?.id || '')) || '{}'); }
+  catch { return {}; }
+}
 function toast(message) {
   const el = document.getElementById('toast');
   el.textContent = message;
@@ -193,7 +209,7 @@ function renderQuestionCards(questions) {
   }
 }
 async function loadQuestions() {
-  const response = await fetch('/scenario-api/questions');
+  const response = await apiFetch('/scenario-api/questions');
   const data = await response.json();
   if (!response.ok) throw new Error(data.error || 'Could not load assessment questions');
   renderQuestionCards(data.questions);
@@ -230,10 +246,11 @@ async function chooseQuestion(questionId) {
   if (activeQuestion && !await saveAllSourceFiles()) return;
   if (activeQuestion) localStorage.setItem(document.getElementById('customerUpdate').dataset.storageKey, document.getElementById('customerUpdate').value);
   try {
-    const response = await fetch('/scenario-api/select', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ questionId }) });
+    const response = await apiFetch('/scenario-api/select', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ questionId }) });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Could not open question');
     activeQuestion = data.question;
+    localStorage.setItem('assessment-question', activeQuestion.id);
     document.title = activeQuestion.title + ' · Debugging Assessment';
     files.clear(); buffers.clear(); savedBuffers.clear(); openFiles.length = 0; closedFiles.length = 0; collapsedFolders.clear();
     workspaceCollapsed = false; activePath = ''; editor.value = ''; lineNumbers.replaceChildren();
@@ -268,13 +285,16 @@ async function chooseQuestion(questionId) {
   } catch (error) { toast('Could not load assessment: ' + error.message); }
 }
 async function loadWorkspace() {
-  const response = await fetch('/scenario-api/files');
+  const response = await apiFetch('/scenario-api/files');
   const data = await response.json();
   if (!response.ok) throw new Error(data.error || 'Could not load workspace');
+  let localOverrides = {};
+  try { localOverrides = JSON.parse(localStorage.getItem(sourceStorageKey()) || '{}'); } catch {}
   for (const file of data.files) {
     files.set(file.path, { editable: file.editable });
-    buffers.set(file.path, file.content);
-    savedBuffers.set(file.path, file.content);
+    const content = file.editable && typeof localOverrides[file.path] === 'string' ? localOverrides[file.path] : file.content;
+    buffers.set(file.path, content);
+    savedBuffers.set(file.path, content);
   }
   renderFileTree();
   await openFile('README.md', false);
@@ -306,9 +326,7 @@ async function saveCurrentFile() {
   if (!activePath || !files.get(activePath)?.editable) { toast('This reference file is read only.'); return true; }
   buffers.set(activePath, editor.value);
   if (!isDirty(activePath)) return true;
-  const response = await fetch('/scenario-api/files', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: activePath, content: editor.value }) });
-  const data = await response.json();
-  if (!response.ok) { toast(data.error || 'Could not save file'); return false; }
+  saveSourceFilesLocally();
   savedBuffers.set(activePath, editor.value);
   updateEditorState(); renderFileTree(); recordActivity('Saved ' + activePath);
   return true;
@@ -317,12 +335,10 @@ async function saveAllSourceFiles() {
   if (activePath) buffers.set(activePath, editor.value);
   for (const filePath of files.keys()) {
     if (!files.get(filePath).editable || !isDirty(filePath)) continue;
-    const response = await fetch('/scenario-api/files', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: filePath, content: buffers.get(filePath) }) });
-    const data = await response.json();
-    if (!response.ok) { toast(data.error || 'Could not save ' + filePath); return false; }
     savedBuffers.set(filePath, buffers.get(filePath));
     recordActivity('Saved ' + filePath);
   }
+  saveSourceFilesLocally();
   updateEditorState(); renderFileTree();
   return true;
 }
@@ -337,7 +353,7 @@ searchInput.addEventListener('input', () => {
   searchTimer = setTimeout(async () => {
     const query = searchInput.value.trim();
     if (!query) { document.getElementById('searchResults').classList.add('hidden'); fileTree.classList.remove('hidden'); return; }
-    const response = await fetch('/scenario-api/search?q=' + encodeURIComponent(query));
+    const response = await apiFetch('/scenario-api/search?q=' + encodeURIComponent(query));
     const data = await response.json();
     const panel = document.getElementById('searchResults'); panel.replaceChildren(); panel.classList.remove('hidden'); fileTree.classList.add('hidden');
     if (!data.matches.length) { panel.textContent = 'No matches found'; }
@@ -369,8 +385,9 @@ async function runCode() {
     if (!await saveAllSourceFiles()) return;
     recordActivity('Ran sample integration request');
     const input = JSON.parse(document.getElementById('requestBody').value);
-    const response = await fetch('/scenario-api/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ input, headers: getBrowserHeaders(true) }) });
+    const response = await apiFetch('/scenario-api/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ input, headers: getBrowserHeaders(true), questionId: activeQuestion.id, sourceFiles: editableSourceFiles(), mongoState: savedMongoState() }) });
     const data = await response.json();
+    if (data.mongoState) localStorage.setItem('assessment-mongo-state-' + activeQuestion.id, JSON.stringify(data.mongoState));
     const item = { name: data.runtimeError ? 'Runtime error: ' + data.runtimeError : 'Execution completed · application returned HTTP ' + data.status, passed: !data.runtimeError && data.status < 400 };
     showResults({ results: [item], stdout: data.stdout }, 'Run Code output', 'output');
     document.getElementById('testSummary').textContent = data.runtimeError ? 'Runtime error' : 'Program finished · HTTP ' + data.status;
@@ -387,7 +404,7 @@ async function runTests(submit = false) {
     const customerUpdate = document.getElementById('customerUpdate').value.trim();
     if (submit && !customerUpdate) { toast('Add a short customer update before submitting.'); return; }
     recordActivity(submit ? 'Submitted assessment and customer update' : 'Ran visible and hidden integration checks');
-    const response = await fetch('/scenario-api/tests/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(submit ? { customerUpdate } : {}) });
+    const response = await apiFetch('/scenario-api/tests/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...(submit ? { customerUpdate } : {}), questionId: activeQuestion.id, sourceFiles: editableSourceFiles() }) });
     const data = await response.json();
     showResults(data, submit ? 'Assessment submission' : 'Automated integration checks', 'tests');
     document.getElementById('testSummary').textContent = data.passed + '/' + data.total + ' checks passed';
@@ -413,8 +430,9 @@ async function sendRequest() {
   catch { toast('Request body must be valid JSON'); button.disabled = false; button.textContent = 'Send'; return; }
   const started = performance.now();
   try {
-    const response = await fetch('/scenario-api' + route, { method: 'POST', headers: { 'Content-Type': 'application/json', ...getBrowserHeaders(true) }, body });
+    const response = await apiFetch('/scenario-api' + route, { method: 'POST', headers: { 'Content-Type': 'application/json', ...getBrowserHeaders(true) }, body: JSON.stringify({ payload: JSON.parse(body), __assessment: { questionId: activeQuestion.id, sourceFiles: editableSourceFiles(), mongoState: savedMongoState() } }) });
     const data = await response.json();
+    if (data.mongoState) localStorage.setItem('assessment-mongo-state-' + activeQuestion.id, JSON.stringify(data.mongoState));
     document.getElementById('responseMeta').textContent = response.status + ' ' + response.statusText + ' · ' + Math.round(performance.now() - started) + ' ms';
     const pre = document.createElement('pre'); pre.className = 'response-code'; pre.textContent = JSON.stringify(data, null, 2);
     document.getElementById('response').replaceChildren(pre); showStdout(data.stdout);
@@ -464,7 +482,7 @@ async function startEnvironment() {
   const shown = new Set();
   try {
     while (true) {
-      const response = await fetch('/assessment/status');
+      const response = await apiFetch('/assessment/status');
       const state = await response.json();
       document.getElementById('bootMessage').textContent = state.message;
       const progressBar = document.getElementById('bootProgress');

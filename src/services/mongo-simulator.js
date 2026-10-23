@@ -1,5 +1,6 @@
-function createMongoDatabase() {
-  const documents = new Map();
+function createMongoDatabase(initialState = {}) {
+  const identity = 'assessment-db-' + Math.random().toString(36).slice(2);
+  const documents = new Map(Object.entries(initialState || {}).map(([name, rows]) => [name, structuredClone(rows)]));
   const uniqueIndexes = new Map();
   const logs = [];
 
@@ -44,9 +45,15 @@ function createMongoDatabase() {
     };
   }
   return {
+    identity,
     collection,
     logs,
     reset() { documents.clear(); uniqueIndexes.clear(); logs.length = 0; },
+    restore(snapshot = {}, newLogs = []) {
+      documents.clear();
+      for (const [name, rows] of Object.entries(snapshot || {})) documents.set(name, structuredClone(rows));
+      for (const line of newLogs || []) logs.push(line);
+    },
     snapshot() { return Object.fromEntries(Array.from(documents, ([name, rows]) => [name, structuredClone(rows)])); }
   };
 }
