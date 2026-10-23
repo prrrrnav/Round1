@@ -1,0 +1,17 @@
+{
+  "name": "codebase-debugging-assessment",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A multi-question codebase debugging assessment with an editable workspace, API browser, and MongoDB collection simulator.",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node src/server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "express": "^5.1.0"
+  }
+}

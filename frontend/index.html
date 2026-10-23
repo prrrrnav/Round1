@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Codebase Debugging Assessment</title><link rel="stylesheet" href="/styles/assessment.css"></head>
+<body data-theme="dark">
+  <section class="boot-screen" id="bootScreen" aria-live="polite">
+    <div class="boot-card"><div class="boot-mark">&lt;/&gt;</div><h1>Starting candidate environment</h1><p id="bootMessage">Preparing the debugging workspace…</p><div class="boot-track"><span id="bootProgress"></span></div><div class="boot-log" id="bootLog"></div></div>
+  </section>
+  <header class="topbar">
+    <a class="brand" href="#"><span class="brand-mark">&lt;/&gt;</span><span>Codebase Debugging Assessment</span></a>
+    <div class="assessment-title"><span class="live-dot"></span> Customer-facing debugging scenario</div>
+    <div class="top-actions"><span class="saved-state" id="saveState">All changes saved</span><button class="reset-button" id="changeQuestion">Choose question</button><button class="reset-button" id="themeToggle" title="Switch to light theme">Light</button><button class="reset-button" id="reset">Clear results</button><span class="avatar">JD</span></div>
+  </header>
+  <main class="layout">
+    <aside class="project-pane">
+      <div class="pane-heading"><span>CODEBASE</span><button title="Workspace options">···</button></div>
+      <button class="project-name" id="workspaceToggle" aria-expanded="true"><span class="folder-icon">▾</span> <span id="workspaceName">Select an assessment</span></button>
+      <div class="search-box"><span>⌕</span><input id="fileSearch" placeholder="Search files and code" aria-label="Search files and code"><kbd>Ctrl P</kbd></div>
+      <div class="file-tree" id="fileTree"></div>
+      <div class="search-results hidden" id="searchResults"></div>
+      <div class="pane-divider"></div>
+      <div class="pane-heading">CUSTOMER REPORT</div>
+      <h2 id="reportTitle">Choose a debugging assessment</h2>
+      <div class="scenario-copy" id="scenarioCopy">
+        <p>Select a problem statement to load its codebase, docs, request scenario, and tests.</p>
+      </div>
+      <div class="task-meta"><span id="questionCategory">● Choose a question</span><span id="questionLevel">◷ No time limit</span></div>
+      <div class="hint-box"><span>DEBUGGING TIP</span><p id="questionTip">Select a question to get started.</p></div>
+      <label class="customer-label" for="customerUpdate">CUSTOMER UPDATE</label>
+      <textarea id="customerUpdate" class="customer-update" placeholder="Explain what failed, what you changed, and what the customer should expect next."></textarea>
+      <button class="save-update" id="saveUpdate">Save customer update</button>
+    </aside>
+    <section class="code-pane">
+      <div class="editor-toolbar"><div class="editor-tabs" id="editorTabs" role="tablist" aria-label="Open files"></div><div class="editor-tools"><span id="fileType">Markdown</span><button class="save-button" id="save">Save</button></div></div>
+      <div class="editor-area"><div class="line-numbers" id="lineNumbers"></div><textarea id="code" spellcheck="false" aria-label="Code editor" autocapitalize="off" autocomplete="off"></textarea></div>
+      <div class="editor-status"><span><i class="green-dot"></i> JavaScript runtime ready</span><span>UTF-8&nbsp;&nbsp; Spaces: 2</span></div>
+      <section class="test-panel">
+        <div class="test-tabs"><button class="view-tab selected" data-view="output">OUTPUT</button><button class="view-tab" data-view="tests">TESTS</button><button class="view-tab" data-view="activity">ACTIVITY</button><span id="testSummary">Run code or tests to see output</span><div class="test-actions"><button class="run-code" id="runCode">▶&nbsp; Run Code</button><button class="run-tests" id="runTests">Run tests</button><button class="submit-assessment" id="submitAssessment">Submit</button></div></div>
+        <div class="test-results" id="testResults"><div class="empty-state">Run Code to see console.log output. Run tests to check the integration behavior.</div></div>
+        <div class="activity-content hidden" id="activityContent"></div>
+        <div class="stdout-panel"><div class="stdout-title"><span>CONSOLE OUTPUT</span><span id="stdoutLabel">stdout</span></div><pre id="stdout">(no output)</pre></div>
+      </section>
+    </section>
+    <section class="browser-pane">
+      <div class="browser-title"><span class="browser-symbol">◉</span><div><strong>Integration browser</strong><small>Send a scenario request through the codebase</small></div><button id="browserReset" title="Clear response">↻</button></div>
+      <div class="browser-url"><span>http://localhost:3000/scenario-api</span><span class="online"><i class="green-dot"></i> Online</span></div>
+      <div class="request-form">
+        <div class="request-line"><select id="method"><option>POST</option></select><input id="path" value="/invoices" aria-label="Request path"><button id="send">Send</button></div>
+        <div class="request-section"><label>REQUEST HEADERS</label><div id="browserHeaders"></div></div>
+        <div class="request-section body-section"><label>REQUEST BODY · JSON</label><textarea id="requestBody" spellcheck="false">{
+  "customerId": "cus_1042",
+  "amount": 49.99
+}</textarea></div>
+      </div>
+      <div class="response-head"><strong>HTTP RESPONSE</strong><span id="responseMeta">Send a request to inspect status, body, and logs</span></div>
+      <div class="response-body" id="response"><div class="response-placeholder">Partner response and integration logs will appear here.</div></div>
+      <div class="browser-shortcuts"><span id="browserHint">Select a question to begin.</span></div>
+    </section>
+  </main>
+  <section class="question-picker hidden" id="questionPicker" aria-modal="true" role="dialog" aria-labelledby="pickerTitle">
+    <div class="picker-card"><div class="picker-kicker">DEBUGGING ASSESSMENTS</div><h1 id="pickerTitle">Choose a problem statement</h1><p class="picker-description">Each question loads its own customer report, layered codebase, documentation, API scenario, and checks.</p><div id="questionCards" class="question-cards"></div><button class="picker-close hidden" id="closeQuestionPicker">Back to assessment</button></div>
+  </section>
+  <div class="toast hidden" id="toast" role="status"></div>
+  <script src="/scripts/assessment.js"></script>
+</body></html>
+
